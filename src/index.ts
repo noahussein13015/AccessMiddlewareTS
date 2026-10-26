@@ -5,11 +5,10 @@ import apiRouter from './routes/app.routes.js';
 import { BadgeReaderService } from './services/reader.service.js';
 import { GenetecService } from './services/genetec.service.js';
 import { DmsService } from './services/dms.service.js';
-import { logger } from './utils/logger.js';
 
 const configPath = path.resolve(process.cwd(), 'appsettings.json');
 if (!fs.existsSync(configPath)) {
-    logger.error("❌ Fichier appsettings.json introuvable.");
+    console.error("❌ Fichier appsettings.json introuvable.");
     process.exit(1);
 }
 
@@ -29,6 +28,7 @@ const genetecService = new GenetecService(
     gateId
 );
 
+// Initialisation DMS
 const dmsConfig = config.Dms || {};
 const dmsService = new DmsService(
     dmsConfig.BaseUrl,
@@ -37,55 +37,41 @@ const dmsService = new DmsService(
 
 const app = express();
 app.use(express.json());
-
-// Middleware de log des requêtes HTTP
-app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-        const duration = Date.now() - start;
-        if (!req.originalUrl.includes('/api/status')) {
-            logger.info(`HTTP ${req.method} ${req.originalUrl} responded ${res.statusCode} in ${duration}ms`);
-        }
-    });
-    next();
-});
-
 app.use('/api', apiRouter);
 
 const readerService = new BadgeReaderService(portName, baudRate, reverseBytes, async (cardId) => {
-    logger.info(`⚡ Badge détecté sur le port COM : ${cardId}`);
-    logger.info(`🔍 Interrogation de l'API Genetec en cours...`);
+    console.log(`\n⚡ Badge détecté sur le port COM : ${cardId}`);
+    console.log(`🔍 Interrogation de l'API Genetec en cours...`);
 
     try {
         const credential = await genetecService.getCredentialByCardId(cardId);
 
         if (!credential) {
-            logger.warn(`❌ Résultat : Badge ${cardId} INCONNU dans Genetec.`);
+            console.warn(`❌ Résultat : Badge ${cardId} INCONNU dans Genetec.`);
             return;
         }
 
-        logger.info(`✅ Badge TROUVÉ dans Genetec ! Porteur : ${credential.cardholder_name} | Accès : ${credential.access}`);
+        console.log(`✅ Badge TROUVÉ dans Genetec !`);
+        console.log(`   - Porteur : ${credential.cardholder_name}`);
+        console.log(`   - Accès   : ${credential.access}`);
 
-        logger.info(`🚀 Transmission du payload vers DMS...`);
+        // Envoi automatique du payload vers l'API DMS
+        console.log(`🚀 Transmission du payload vers DMS...`);
         const dmsResponse = await dmsService.sendTwicCard(credential);
 
         if (dmsResponse) {
-            logger.info(`✅ Réponse DMS reçue avec succès (LogId: ${dmsResponse.log_id}, Route: ${dmsResponse.route})`);
+            console.log(`✅ Réponse DMS reçue avec succès (LogId: ${dmsResponse.log_id}, Route: ${dmsResponse.route})`);
         } else {
-            logger.warn(`⚠️ L'envoi vers DMS a échoué ou n'a pas retourné de réponse valide.`);
+            console.warn(`⚠️ L'envoi vers DMS a échoué ou n'a pas retourné de réponse valide.`);
         }
 
     } catch (error) {
-        logger.error(`❌ Erreur lors du traitement du badge ${cardId} :`, { error });
+        console.error(`❌ Erreur lors du traitement du badge ${cardId} :`, error);
     }
 });
 
-try {
-    readerService.start();
-} catch (error) {
-    logger.error("❌ Erreur au démarrage du service de lecture de badge :", { error });
-}
+readerService.start();
 
 app.listen(serverPort, () => {
-    logger.info(`🚀 Serveur Express démarré sur le port ${serverPort}`);
+    console.log(`🚀 Serveur Express démarré sur le port ${serverPort}`);
 });

@@ -20,8 +20,6 @@
   "dependencies": {
     "express": "^5.3.0",
     "fast-xml-parser": "^5.11.2",
-    "serialport": "^13.0.0",
-    "winston": "^3.19.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "serialport": "^13.0.0"
   }
 }
